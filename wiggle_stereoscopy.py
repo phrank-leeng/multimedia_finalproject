@@ -1,48 +1,57 @@
 import cv2
-import torch
-
+import imageio
 import matplotlib.pyplot as plt
-
-class WiggleStereoscopy:
-    def __init__(self):
-        model_type = "DPT_Large"  # MiDaS v3 - Large     (highest accuracy, slowest inference speed)
-        # model_type = "DPT_Hybrid"   # MiDaS v3 - Hybrid    (medium accuracy, medium inference speed)
-        # model_type = "MiDaS_small"  # MiDaS v2.1 - Small   (lowest accuracy, highest inference speed)
-
-        midas = torch.hub.load("intel-isl/MiDaS", model_type)
-
-        # move model to GPU if available
-        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        midas.to(device)
-        midas.eval()
-
-        # load transforms to resize and normalize the image for large or small model
-        midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
-
-        if model_type == "DPT_Large" or model_type == "DPT_Hybrid":
-            self.transform = midas_transforms.dpt_transform
-        else:
-            self.transform = midas_transforms.small_transform
-
-        def load_img(path):
-            img = cv2.imread(path)
-            return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-        def predict_depth_map(img):
-            input_batch = self.transform(img).to(device)
-
-            with torch.no_grad():
-                prediction = midas(input_batch)
-
-                prediction = torch.nn.functional.interpolate(
-                    prediction.unsqueeze(1),
-                    size=img.shape[:2],
-                    mode="bicubic",
-                    align_corners=False,
-                ).squeeze()
-
-            output = prediction.cpu().numpy()
-
-            plt.imshow(output)
+import numpy as np
 
 
+class Stereoscopy:
+    def __init__(self, max_shift):
+        self.max_shift = max_shift
+
+    def shift_image(self, image, depth_map):
+        height, width = image.shape[:2]
+        shifted_image = np.zeros((height, width, 3), dtype=np.uint8)
+
+        depth_map_min = np.min(depth_map)
+        depth_map_max = np.max(depth_map)
+
+        for y in range(height):
+            for x in range(width):
+                # Calculate the normalized depth
+                normalized_depth = (depth_map[y, x] - depth_map_min) / (depth_map_max - depth_map_min)
+
+                # Calculate the shift amount (you can adjust the direction of shift here)
+                shift = int(normalized_depth * self.max_shift)
+
+                # Calculate new position
+                new_x = x + shift
+
+                # Ensure new position is within image bounds
+                if 0 <= new_x < width:
+                    shifted_image[y, new_x] = image[y, x]
+
+        plt.imshow(shifted_image)
+        plt.show()
+
+        return shifted_image
+
+    def create_mask(self, img):
+        height, width = img.shape[:2]
+        mask = np.zeros((height, width), dtype=np.uint8)
+        # Identify gaps in the offset image
+        for y in range(height):
+            for x in range(width):
+                if np.all(img[y, x] == 0):
+                    mask[y, x] = 255
+
+        plt.imshow(mask, cmap='gray')
+        plt.show()
+        return mask
+
+    def apply_inpainting(self, offset_image, mask, inpaint_radius):
+        offset_image_uint8 = offset_image.astype(np.uint8)
+        return cv2.inpaint(offset_image_uint8, mask, inpaint_radius, cv2.INPAINT_TELEA)
+
+    def create_gif(self, image, shifted_image, gif_path):
+        images = [image, shifted_image] * 10
+        imageio.mimsave(gif_path, images, duration=0.25, loop=0)
