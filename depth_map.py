@@ -2,9 +2,6 @@ import cv2
 import numpy as np
 import torch
 
-import matplotlib.pyplot as plt
-from PIL import Image
-
 
 class DepthMapGenerator:
     def __init__(self):
@@ -33,6 +30,7 @@ class DepthMapGenerator:
         return img
 
     def predict_depth_map(self, img):
+        print("Predicting depth map...")
         input_batch = self.transform(img).to(self.device)
 
         with torch.no_grad():
@@ -49,7 +47,4 @@ class DepthMapGenerator:
         output_norm = cv2.normalize(output, None, 0, 1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
 
         output_norm_255 = (output_norm * 255).astype(np.uint8)
-
-        Image.fromarray(output_norm_255).save("output.png")
-
         return output_norm_255
