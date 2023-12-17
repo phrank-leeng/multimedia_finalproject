@@ -18,6 +18,7 @@ if __name__ == '__main__':
     image_path = config['ImagePaths']['image_path']
     depth_map_path = config['ImagePaths']['depth_map_path']
     output_gif_path = config['ImagePaths']['output_gif_path']
+    shift_point = config['StereoscopySettings']['shift_point']
 
     dmg = DepthMapGenerator()
     img = dmg.load_img(image_path)
@@ -30,7 +31,7 @@ if __name__ == '__main__':
     # depth_map = cv2.imread("output.png", cv2.IMREAD_GRAYSCALE)
 
     stereo = Stereoscopy(config_path)
-    shifted_img = stereo.shift_image(img, depth_map, 180)
+    shifted_img = stereo.shift_image(img, depth_map, shift_point)
     mask = stereo.create_mask(shifted_img)
     shifted_img = stereo.apply_inpainting(shifted_img, mask, 2)
     stereo.create_gif(img, shifted_img, output_gif_path, 1)
